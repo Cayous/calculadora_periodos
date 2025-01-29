@@ -1,15 +1,15 @@
+# app.py
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import os
-from werkzeug.utils import secure_filename
+import tempfile
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'temp_uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max-limit
 
-# Criar pasta temporária se não existir
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+# No ambiente serverless, usamos um diretório temporário
+app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max-limit
 
 def format_duration(start_date, end_date):
     duration = relativedelta(end_date, start_date)
@@ -108,7 +108,7 @@ def upload_file():
 
     if file:
         try:
-            # Ler o conteúdo do arquivo
+            # Ler o conteúdo do arquivo diretamente da memória
             content = file.read().decode('utf-8')
             
             # Calcular períodos
@@ -118,5 +118,4 @@ def upload_file():
         except Exception as e:
             return jsonify({'error': str(e)})
 
-if __name__ == '__main__':
-    app.run(debug=True)
+# Remova o if __name__ == '__main__' para o Vercel
