@@ -82,10 +82,14 @@
             formData.append('file', file);
 
             try {
-                const response = await fetch('/upload', {
+                const response = await fetch('./upload', {
                     method: 'POST',
                     body: formData
                 });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
 
                 const data = await response.json();
 
@@ -96,7 +100,8 @@
 
                 displayResults(data);
             } catch (error) {
-                showError('Erro ao processar o arquivo');
+                console.error('Error:', error);
+                showError('Erro ao processar o arquivo: ' + error.message);
             }
         });
 
