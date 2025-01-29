@@ -4,7 +4,6 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max-limit
 
 def format_duration(start_date, end_date):
     duration = relativedelta(end_date, start_date)
@@ -102,12 +101,8 @@ def upload_file():
         return jsonify({'error': 'Nenhum arquivo selecionado'})
 
     try:
-        # Ler o conteúdo do arquivo diretamente da memória
         content = file.read().decode('utf-8')
-        
-        # Calcular períodos
         result = calculate_periods(content)
-        
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)})
