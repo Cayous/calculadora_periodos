@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Períodos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <h1 class="text-3xl font-bold text-center mb-8">Calculadora de Períodos</h1>
+        
+        <!-- Upload Form -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <form id="uploadForm" class="flex flex-col items-center">
+                <div class="mb-4 w-full">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">
+                        Selecione o arquivo de períodos (formato: dd/mm/yyyy - dd/mm/yyyy)
+                    </label>
+                    <input type="file" 
+                           id="fileInput" 
+                           accept=".txt"
+                           class="w-full p-2 border border-gray-300 rounded">
+                </div>
+                <button type="submit" 
+                        class="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600">
+                    Calcular Períodos
+                </button>
+            </form>
+        </div>
+
+        <!-- Results -->
+        <div id="results" class="hidden">
+            <!-- Total Duration -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+                <h2 class="text-xl font-bold mb-4">Tempo Total</h2>
+                <p id="totalDuration" class="text-lg"></p>
+            </div>
+
+            <!-- Input Periods -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+                <h2 class="text-xl font-bold mb-4">Datas de Entrada</h2>
+                <div id="inputPeriods" class="text-sm"></div>
+            </div>
+
+            <!-- Analyzed Periods -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-bold mb-4">Períodos Contabilizados e Excluídos</h2>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full table-auto">
+                        <thead>
+                            <tr class="bg-gray-50">
+                                <th class="px-4 py-2 text-left">Período</th>
+                                <th class="px-4 py-2 text-left">Tempo</th>
+                                <th class="px-4 py-2 text-left">Observação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="analyzedPeriods"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Message -->
+        <div id="errorMessage" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4">
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showError('Por favor, selecione um arquivo');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+
+                displayResults(data);
+            } catch (error) {
+                showError('Erro ao processar o arquivo');
+            }
+        });
+
+        function displayResults(data) {
+            // Hide error message if visible
+            document.getElementById('errorMessage').classList.add('hidden');
+            
+            // Show results container
+            document.getElementById('results').classList.remove('hidden');
+
+            // Display total duration
+            const totalDuration = [];
+            if (data.total_duration.years > 0) {
+                totalDuration.push(`${data.total_duration.years} ${data.total_duration.years === 1 ? 'ano' : 'anos'}`);
+            }
+            if (data.total_duration.months > 0) {
+                totalDuration.push(`${data.total_duration.months} ${data.total_duration.months === 1 ? 'mês' : 'meses'}`);
+            }
+            if (data.total_duration.days > 0) {
+                totalDuration.push(`${data.total_duration.days} ${data.total_duration.days === 1 ? 'dia' : 'dias'}`);
+            }
+            document.getElementById('totalDuration').textContent = totalDuration.join(', ');
+
+            // Display input periods
+            const inputPeriodsHtml = data.input_periods.map(period => `<div>${period}</div>`).join('');
+            document.getElementById('inputPeriods').innerHTML = inputPeriodsHtml;
+
+            // Display analyzed periods
+            const analyzedPeriodsHtml = data.analyzed_periods.map(period => `
+                <tr class="border-b">
+                    <td class="px-4 py-2">${period.period}</td>
+                    <td class="px-4 py-2">${period.duration}</td>
+                    <td class="px-4 py-2">${period.is_excluded ? 'Período excluído por concomitância' : ''}</td>
+                </tr>
+            `).join('');
+            document.getElementById('analyzedPeriods').innerHTML = analyzedPeriodsHtml;
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+            document.getElementById('results').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
