@@ -2,6 +2,7 @@
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+import os
 
 app = Flask(__name__)
 
@@ -22,8 +23,10 @@ def check_overlap(period1, period2):
 
 def calculate_periods(file_content):
     try:
+        # Processar as linhas do arquivo
         periods = [line.strip() for line in file_content.split('\n') if line.strip()]
         
+        # Converter períodos para datas
         date_ranges = []
         for period in periods:
             start_str, end_str = period.split(" - ")
@@ -31,10 +34,12 @@ def calculate_periods(file_content):
             end_date = datetime.strptime(end_str, "%d/%m/%Y")
             date_ranges.append((start_date, end_date))
 
+        # Calcular duração total
         total_start = min([start for start, end in date_ranges])
         total_end = max([end for start, end in date_ranges])
         total_duration = relativedelta(total_end, total_start)
         
+        # Preparar períodos para processamento
         all_periods = []
         valid_periods = []
 
@@ -48,8 +53,10 @@ def calculate_periods(file_content):
             }
             all_periods.append(period)
 
+        # Ordenar períodos
         all_periods.sort(key=lambda x: x['start_date'])
 
+        # Verificar sobreposições
         for period in all_periods:
             for valid_period in valid_periods:
                 if check_overlap(valid_period, period):
@@ -58,6 +65,7 @@ def calculate_periods(file_content):
             if not period['is_excluded']:
                 valid_periods.append(period)
 
+        # Preparar resultado
         result = {
             'total_duration': {
                 'years': total_duration.years,
@@ -99,3 +107,7 @@ def upload_file():
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)})
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
