@@ -21,6 +21,22 @@ def check_overlap(period1, period2):
     return (period1['start_date'] <= period2['end_date'] and 
             period1['end_date'] >= period2['start_date'])
 
+def sum_durations(durations):
+    total_years = sum(d.years for d in durations)
+    total_months = sum(d.months for d in durations)
+    total_days = sum(d.days for d in durations)
+    
+    # Ajustar meses e dias
+    extra_months = total_days // 30
+    total_days = total_days % 30
+    total_months += extra_months
+    
+    extra_years = total_months // 12
+    total_months = total_months % 12
+    total_years += extra_years
+    
+    return relativedelta(years=total_years, months=total_months, days=total_days)
+
 def calculate_periods(file_content):
     try:
         # Processar as linhas do arquivo
@@ -34,11 +50,6 @@ def calculate_periods(file_content):
             end_date = datetime.strptime(end_str, "%d/%m/%Y")
             date_ranges.append((start_date, end_date))
 
-        # Calcular duração total
-        total_start = min([start for start, end in date_ranges])
-        total_end = max([end for start, end in date_ranges])
-        total_duration = relativedelta(total_end, total_start)
-        
         # Preparar períodos para processamento
         all_periods = []
         valid_periods = []
@@ -64,6 +75,14 @@ def calculate_periods(file_content):
                     break
             if not period['is_excluded']:
                 valid_periods.append(period)
+
+        # Calcular duração total somando os períodos válidos
+        durations = []
+        for period in valid_periods:
+            duration = relativedelta(period['end_date'], period['start_date'])
+            durations.append(duration)
+        
+        total_duration = sum_durations(durations)
 
         # Preparar resultado
         result = {
