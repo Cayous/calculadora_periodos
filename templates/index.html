@@ -3,61 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calculadora de Períodos</title>
+    <title>Calculadora de Períodos Previdenciários</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen">
     <div class="container mx-auto px-4 py-8 max-w-4xl">
-        <h1 class="text-3xl font-bold text-center mb-8">Calculadora de Períodos</h1>
+        <h1 class="text-3xl font-bold text-center mb-8">Calculadora de Períodos Previdenciários</h1>
         
         <!-- Upload Form -->
         <div class="bg-white rounded-lg shadow-md p-6 mb-8">
             <form id="uploadForm" class="flex flex-col items-center">
                 <div class="mb-4 w-full">
                     <label class="block text-gray-700 text-sm font-bold mb-2">
-                        Selecione o arquivo de períodos (formato: dd/mm/yyyy - dd/mm/yyyy)
+                        Selecione o arquivo de períodos (formato: dd/mm/yyyy a dd/mm/yyyy)
                     </label>
                     <input type="file" 
                            id="fileInput" 
                            accept=".txt"
-                           class="w-full p-2 border border-gray-300 rounded">
+                           class="w-full p-2 border border-gray-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                 </div>
                 <button type="submit" 
-                        class="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600">
+                        id="submitButton"
+                        class="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors">
                     Calcular Períodos
                 </button>
             </form>
         </div>
 
         <!-- Results -->
-        <div id="results" class="hidden">
+        <div id="results" class="hidden space-y-8">
             <!-- Total Duration -->
-            <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-                <h2 class="text-xl font-bold mb-4">Tempo Total</h2>
-                <p id="totalDuration" class="text-lg"></p>
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-bold mb-4">Tempo Total de Contribuição</h2>
+                <div class="flex items-center">
+                    <p id="totalDuration" class="text-lg"></p>
+                    <button onclick="copyTotal()" class="ml-4 px-3 py-1 text-sm text-blue-500 hover:text-blue-700 border border-blue-500 rounded hover:bg-blue-50 transition-colors">
+                        Copiar
+                    </button>
+                </div>
             </div>
 
             <!-- Input Periods -->
-            <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-                <h2 class="text-xl font-bold mb-4">Datas de Entrada</h2>
-                <div id="inputPeriods" class="text-sm"></div>
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-bold mb-4">Períodos Informados</h2>
+                <div id="inputPeriods" class="text-sm space-y-1"></div>
             </div>
 
             <!-- Analyzed Periods -->
             <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-xl font-bold mb-4">Períodos Contabilizados e Excluídos</h2>
+                <h2 class="text-xl font-bold mb-4">Detalhamento dos Períodos</h2>
                 <div class="overflow-x-auto">
                     <table class="min-w-full table-auto">
                         <thead>
                             <tr class="bg-gray-50">
-                                <th class="px-4 py-2 text-left">Período</th>
-                                <th class="px-4 py-2 text-left">Tempo</th>
-                                <th class="px-4 py-2 text-left">Observação</th>
+                                <th class="px-4 py-2 text-left font-semibold">Período</th>
+                                <th class="px-4 py-2 text-left font-semibold">Tempo de Contribuição</th>
+                                <th class="px-4 py-2 text-left font-semibold">Observação</th>
                             </tr>
                         </thead>
                         <tbody id="analyzedPeriods"></tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="hidden">
+            <div class="flex justify-center items-center p-8">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                <span class="ml-2 text-gray-600">Processando...</span>
             </div>
         </div>
 
@@ -71,12 +85,30 @@
             e.preventDefault();
             
             const fileInput = document.getElementById('fileInput');
+            const submitButton = document.getElementById('submitButton');
+            const loadingState = document.getElementById('loadingState');
+            const results = document.getElementById('results');
+            const errorMessage = document.getElementById('errorMessage');
+            
             const file = fileInput.files[0];
             
+            // Validações
             if (!file) {
                 showError('Por favor, selecione um arquivo');
                 return;
             }
+            
+            if (file.size > 1024 * 1024) { // 1MB
+                showError('Arquivo muito grande. Tamanho máximo permitido: 1MB');
+                return;
+            }
+
+            // Início do processamento
+            submitButton.disabled = true;
+            submitButton.textContent = 'Processando...';
+            loadingState.classList.remove('hidden');
+            results.classList.add('hidden');
+            errorMessage.classList.add('hidden');
 
             const formData = new FormData();
             formData.append('file', file);
@@ -88,7 +120,7 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(`Erro no servidor (${response.status})`);
                 }
 
                 const data = await response.json();
@@ -102,6 +134,10 @@
             } catch (error) {
                 console.error('Error:', error);
                 showError('Erro ao processar o arquivo: ' + error.message);
+            } finally {
+                submitButton.disabled = false;
+                submitButton.textContent = 'Calcular Períodos';
+                loadingState.classList.add('hidden');
             }
         });
 
@@ -126,15 +162,19 @@
             document.getElementById('totalDuration').textContent = totalDuration.join(', ');
 
             // Display input periods
-            const inputPeriodsHtml = data.input_periods.map(period => `<div>${period}</div>`).join('');
+            const inputPeriodsHtml = data.input_periods.map(period => 
+                `<div class="py-1 px-2 hover:bg-gray-50 rounded">${period}</div>`
+            ).join('');
             document.getElementById('inputPeriods').innerHTML = inputPeriodsHtml;
 
             // Display analyzed periods
             const analyzedPeriodsHtml = data.analyzed_periods.map(period => `
-                <tr class="border-b">
-                    <td class="px-4 py-2">${period.period}</td>
-                    <td class="px-4 py-2">${period.duration}</td>
-                    <td class="px-4 py-2">${period.is_excluded ? 'Período excluído por concomitância' : ''}</td>
+                <tr class="border-b hover:bg-gray-50 transition-colors">
+                    <td class="px-4 py-2 ${period.is_excluded ? 'text-gray-500' : ''}">${period.period}</td>
+                    <td class="px-4 py-2 ${period.is_excluded ? 'text-gray-500' : ''}">${period.duration}</td>
+                    <td class="px-4 py-2 ${period.is_excluded ? 'text-red-500' : ''}">${
+                        period.is_excluded ? 'Período excluído por concomitância' : ''
+                    }</td>
                 </tr>
             `).join('');
             document.getElementById('analyzedPeriods').innerHTML = analyzedPeriodsHtml;
@@ -142,9 +182,35 @@
 
         function showError(message) {
             const errorDiv = document.getElementById('errorMessage');
-            errorDiv.textContent = message;
+            errorDiv.innerHTML = `
+                <div class="flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                    </svg>
+                    <span>${message}</span>
+                </div>
+            `;
             errorDiv.classList.remove('hidden');
             document.getElementById('results').classList.add('hidden');
+        }
+
+        function copyTotal() {
+            const total = document.getElementById('totalDuration').textContent;
+            navigator.clipboard.writeText(total)
+                .then(() => {
+                    const button = document.querySelector('button[onclick="copyTotal()"]');
+                    const originalText = button.textContent;
+                    button.textContent = 'Copiado!';
+                    button.classList.add('bg-green-50', 'text-green-600', 'border-green-600');
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                        button.classList.remove('bg-green-50', 'text-green-600', 'border-green-600');
+                    }, 2000);
+                })
+                .catch(err => {
+                    console.error('Erro ao copiar:', err);
+                    showError('Não foi possível copiar o texto');
+                });
         }
     </script>
 </body>

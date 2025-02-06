@@ -1,109 +1,117 @@
 # app.py
 from flask import Flask, render_template, request, jsonify
-from datetime import datetime
+from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 import os
 
 app = Flask(__name__)
 
-def format_duration(start_date, end_date):
-    duration = relativedelta(end_date, start_date)
+def format_duration(years, months, days):
     parts = []
-    if duration.years > 0:
-        parts.append(f"{duration.years} {'ano' if duration.years == 1 else 'anos'}")
-    if duration.months > 0:
-        parts.append(f"{duration.months} {'mês' if duration.months == 1 else 'meses'}")
-    if duration.days > 0:
-        parts.append(f"{duration.days} {'dia' if duration.days == 1 else 'dias'}")
-    return ", ".join(parts)
+    if years > 0:
+        parts.append(f"{years} {'ano' if years == 1 else 'anos'}")
+    if months > 0:
+        parts.append(f"{months} {'mês' if months == 1 else 'meses'}")
+    if days > 0 or not parts:
+        parts.append(f"{days} {'dia' if days == 1 else 'dias'}")
+    return " ".join(parts)
 
-def check_overlap(period1, period2):
-    return (period1['start_date'] <= period2['end_date'] and 
-            period1['end_date'] >= period2['start_date'])
+def merge_periods(periods):
+    if not periods:
+        return []
+    
+    sorted_periods = sorted([(start, end) for start, end in periods], key=lambda x: x[0])
+    merged = [sorted_periods[0]]
+    
+    for current_start, current_end in sorted_periods[1:]:
+        last_start, last_end = merged[-1]
+        
+        if current_start <= last_end:
+            merged[-1] = (min(last_start, current_start), max(last_end, current_end))
+        else:
+            merged.append((current_start, current_end))
+    
+    final_merged = []
+    for period in merged:
+        start, end = period
+        keep = True
+        for other_start, other_end in merged:
+            if period != (other_start, other_end) and other_start <= start and end <= other_end:
+                keep = False
+                break
+        if keep:
+            final_merged.append(period)
+    
+    adjustments = []
+    for i in range(1, len(final_merged)):
+        prev_end = final_merged[i-1][1]
+        curr_start, curr_end = final_merged[i]
+        if curr_start <= prev_end:
+            new_start = prev_end + relativedelta(days=1)
+            if new_start < curr_end:
+                adjustments.append((new_start, curr_end))
+    final_merged = final_merged[:1] + adjustments
+    
+    return sorted(final_merged, key=lambda x: x[0])
 
 def sum_durations(durations):
-    total_years = sum(d.years for d in durations)
-    total_months = sum(d.months for d in durations)
-    total_days = sum(d.days for d in durations)
+    base_date = date(1, 1, 1)
+    current_date = base_date
     
-    # Ajustar meses e dias
-    extra_months = total_days // 30
-    total_days = total_days % 30
-    total_months += extra_months
+    for years, months, days in durations:
+        current_date += relativedelta(
+            years=years,
+            months=months,
+            days=days
+        )
     
-    extra_years = total_months // 12
-    total_months = total_months % 12
-    total_years += extra_years
-    
-    return relativedelta(years=total_years, months=total_months, days=total_days)
+    total_delta = relativedelta(current_date, base_date)
+    return (total_delta.years, total_delta.months, total_delta.days)
 
 def calculate_periods(file_content):
     try:
-        # Processar as linhas do arquivo
         periods = [line.strip() for line in file_content.split('\n') if line.strip()]
-        
-        # Converter períodos para datas
         date_ranges = []
-        for period in periods:
-            start_str, end_str = period.split(" - ")
-            start_date = datetime.strptime(start_str, "%d/%m/%Y")
-            end_date = datetime.strptime(end_str, "%d/%m/%Y")
-            date_ranges.append((start_date, end_date))
-
-        # Preparar períodos para processamento
-        all_periods = []
-        valid_periods = []
-
-        for start_date, end_date in date_ranges:
-            period = {
-                'start_date': start_date,
-                'end_date': end_date,
-                'start_str': start_date.strftime('%d/%m/%Y'),
-                'end_str': end_date.strftime('%d/%m/%Y'),
-                'is_excluded': False
-            }
-            all_periods.append(period)
-
-        # Ordenar períodos
-        all_periods.sort(key=lambda x: x['start_date'])
-
-        # Verificar sobreposições
-        for period in all_periods:
-            for valid_period in valid_periods:
-                if check_overlap(valid_period, period):
-                    period['is_excluded'] = True
-                    break
-            if not period['is_excluded']:
-                valid_periods.append(period)
-
-        # Calcular duração total somando os períodos válidos
-        durations = []
-        for period in valid_periods:
-            duration = relativedelta(period['end_date'], period['start_date'])
-            durations.append(duration)
         
-        total_duration = sum_durations(durations)
-
-        # Preparar resultado
-        result = {
+        for period in periods:
+            start_str, end_str = period.split(" a ")
+            start_date = datetime.strptime(start_str, "%d/%m/%Y").date()
+            end_date = datetime.strptime(end_str, "%d/%m/%Y").date()
+            date_ranges.append((start_date, end_date))
+        
+        merged_periods = merge_periods(date_ranges)
+        durations = []
+        
+        for start, end in merged_periods:
+            delta = relativedelta(end + relativedelta(days=1), start)
+            durations.append((delta.years, delta.months, delta.days))
+        
+        total_years, total_months, total_days = sum_durations(durations)
+        merged_tuples = set(merged_periods)
+        analyzed_periods = []
+        
+        for original_start, original_end in date_ranges:
+            original_tuple = (original_start, original_end)
+            delta = relativedelta(original_end + relativedelta(days=1), original_start)
+            duration_str = format_duration(delta.years, delta.months, delta.days)
+            is_excluded = original_tuple not in merged_tuples
+            
+            analyzed_periods.append({
+                'period': f"{original_start.strftime('%d/%m/%Y')} a {original_end.strftime('%d/%m/%Y')}",
+                'duration': duration_str,
+                'is_excluded': is_excluded
+            })
+        
+        return {
             'total_duration': {
-                'years': total_duration.years,
-                'months': total_duration.months,
-                'days': total_duration.days
+                'years': total_years,
+                'months': total_months,
+                'days': total_days
             },
             'input_periods': periods,
-            'analyzed_periods': []
+            'analyzed_periods': analyzed_periods
         }
-
-        for period in all_periods:
-            result['analyzed_periods'].append({
-                'period': f"{period['start_str']} a {period['end_str']}",
-                'duration': format_duration(period['start_date'], period['end_date']),
-                'is_excluded': period['is_excluded']
-            })
-
-        return result
-
+    
     except Exception as e:
         return {'error': str(e)}
 
